@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>Claude Agent Viewer</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="wallpaper"></div>
+
+  <header id="bar">
+    <div class="bar-left">
+      <span class="logo">✻</span><span class="brand">Claude</span>
+      <div id="workspaces"></div>
+    </div>
+    <div class="bar-center" id="bar-title"></div>
+    <div class="bar-right">
+      <button class="pill update hidden" id="update-pill"></button>
+      <span class="pill" id="stat-agents" title="Subagents running / finished"></span>
+      <span class="pill" id="clock"></span>
+      <div class="wc">
+        <button id="wc-min" title="Minimize">─</button>
+        <button id="wc-max" title="Maximize">□</button>
+        <button id="wc-close" title="Close">✕</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="desktop"></main>
+
+  <div id="toasts"></div>
+
+  <div id="help" class="hidden">
+    <div class="help-card">
+      <h2><span class="logo">✻</span> Claude Agent Viewer</h2>
+      <div id="help-binds"></div>
+      <p class="help-foot">Mouse: click to focus · Alt+drag a tile onto another to swap · Alt+right-drag to resize · Alt+wheel switches workspace</p>
+    </div>
+  </div>
+
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="render-agent.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
