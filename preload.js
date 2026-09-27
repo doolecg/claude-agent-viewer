@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('cav', {
   close: () => ipcRenderer.send('win:close'),
   devtools: () => ipcRenderer.send('devtools'),
   version: () => ipcRenderer.invoke('app:version'),
+  startupFolder: () => ipcRenderer.invoke('startup-folder'),
   checkUpdate: () => ipcRenderer.send('update:check'),
   installUpdate: () => ipcRenderer.send('update:install'),
   on: (ch, fn) => ipcRenderer.on(ch, (_e, d) => fn(d)),

@@ -5,6 +5,8 @@ A Hyprland-style tiling window manager for Claude Code on Windows. It opens with
 ## Install
 Download `Claude-Agent-Viewer-<version>.msi` from the [latest release](https://github.com/doolecg/claude-agent-viewer/releases/latest) and run it. It installs per-user, so there's no admin prompt, and adds Start menu and desktop shortcuts. Windows SmartScreen may warn because the installer isn't code-signed: choose *More info → Run anyway*.
 
+**Explorer integration:** right-click any folder, the empty space inside one, or a drive, and choose **Open in Claude Agent Viewer**. It sits right under *Open PowerShell window here*. If the viewer is already running, the folder opens as a new Claude tile in that window. Turn this off with `"explorerContextMenu": false`.
+
 **Auto-updates:** the app checks this repo's latest release at startup and every 3 hours, then downloads the new MSI in the background. When it's ready, an *Update* pill appears in the top bar. Click it to install and restart, or it installs when you quit. Turn this off with `"autoUpdate": false`.
 
 ## Develop

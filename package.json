@@ -1,11 +1,11 @@
 {
   "name": "claude-agent-viewer",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Hyprland-style tiling viewer for Claude Code terminals and their subagents",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node --check main.js && node --check updater.js && node --check renderer/renderer.js",
+    "test": "node --check main.js && node --check updater.js && node --check renderer/renderer.js && node --check shell-integration.js",
     "dist": "electron-builder --win msi --x64"
   },
   "author": {
@@ -41,7 +41,8 @@
       "updater.js",
       "renderer/**",
       "build/icon.png",
-      "package.json"
+      "package.json",
+      "shell-integration.js"
     ],
     "asarUnpack": [
       "node_modules/@lydell/**"

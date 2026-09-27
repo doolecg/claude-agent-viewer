@@ -645,5 +645,10 @@
   pill.onclick = () => { if (pill.classList.contains('ready')) cav.installUpdate(); };
 
   refreshBar();
-  if (cfg.masterOnStartup) newTerminal('claude', cfg.defaultCwd, { master: true });
+  // Opened from Explorer's "Open in Claude Agent Viewer": the master starts in that folder,
+  // and later right-clicks (while running) each add a Claude tile there.
+  const startDir = await cav.startupFolder();
+  if (startDir) lastCwd = startDir;
+  if (cfg.masterOnStartup || startDir) newTerminal('claude', startDir || cfg.defaultCwd, { master: true });
+  cav.on('open-folder', dir => { lastCwd = dir; newTerminal('claude', dir); });
 })();

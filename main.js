@@ -9,6 +9,7 @@ const os = require('os');
 const crypto = require('crypto');
 const pty = require('@lydell/node-pty');
 const { createUpdater } = require('./updater');
+const shellIntegration = require('./shell-integration');
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 // Lives in %APPDATA%/Claude Agent Viewer so it survives updates (the install dir is replaced).
@@ -61,6 +62,7 @@ const DEFAULT_CONFIG = {
   fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, monospace",
   opacity: 0.86,
   autoUpdate: true,               // check GitHub releases and install new versions
+  explorerContextMenu: true,      // "Open in Claude Agent Viewer" when right-clicking a folder
   keybinds: DEFAULT_KEYBINDS,
 };
 
@@ -83,6 +85,18 @@ const send = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send
 const ptys = new Map(); // id -> pty
 
 ipcMain.handle('config', () => config);
+
+// A folder passed on the command line (e.g. from the Explorer right-click entry).
+function folderArg(argv) {
+  const args = argv.slice(app.isPackaged ? 1 : 2).filter(a => !a.startsWith('-'));
+  for (const a of args) {
+    const dir = a.replace(/"/g, '');
+    try { if (fs.statSync(dir).isDirectory()) return path.resolve(dir); } catch {}
+  }
+  return null;
+}
+const startupFolder = folderArg(process.argv);
+ipcMain.handle('startup-folder', () => startupFolder);
 
 ipcMain.handle('pty:create', (_e, { kind, cwd, cols, rows }) => {
   const id = crypto.randomUUID();
@@ -284,7 +298,26 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(() => { Menu.setApplicationMenu(null); createWindow(); });
+// One window: launching again (say from Explorer) opens a Claude tile in the running one.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', (_e, argv) => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.focus();
+    const dir = folderArg(argv);
+    if (dir) send('open-folder', dir);
+  });
+  app.whenReady().then(() => {
+    Menu.setApplicationMenu(null);
+    createWindow();
+    if (app.isPackaged) {
+      if (config.explorerContextMenu) shellIntegration.register(process.execPath);
+      else shellIntegration.unregister();
+    }
+  });
+}
 app.on('window-all-closed', () => {
   for (const p of ptys.values()) { try { p.kill(); } catch {} }
   app.quit();
