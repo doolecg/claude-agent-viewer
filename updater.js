@@ -3,7 +3,7 @@
 // (a major upgrade over the installed version) and relaunch.
 
 const { app, net } = require('electron');
-const { spawn } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -57,20 +57,33 @@ function createUpdater({ send, currentVersion = app.getVersion() }) {
     }
   }
 
-  // Runs detached so it survives our exit: wait for us to close, install, optionally relaunch.
+  // A worker PowerShell waits for us to close, runs msiexec, then optionally relaunches.
+  // It must outlive us, and Node can't start it directly: with `detached` (DETACHED_PROCESS)
+  // powershell.exe exits without running anything, and without it the child dies with us.
+  // So a short-lived launcher starts the worker via Start-Process (its own console, not our
+  // child), and we wait for the launcher before quitting.
   function install(relaunch) {
     if (!ready || installing) return false;
+    const q = s => s.replace(/'/g, "''");
+    const exe = process.execPath;
+    const log = path.join(os.tmpdir(), `ClaudeAgentViewer-${ready.version}-install.log`);
+    const worker = [
+      `Wait-Process -Id ${process.pid} -Timeout 60 -ErrorAction SilentlyContinue`,
+      // Electron helpers and node-pty's console hosts can outlive the main process briefly.
+      `$dir = '${q(path.dirname(exe))}\\'`,
+      `Get-Process | Where-Object { try { $_.Path -and $_.Path.StartsWith($dir, 'OrdinalIgnoreCase') } catch { $false } } | Wait-Process -Timeout 30 -ErrorAction SilentlyContinue`,
+      `Start-Process msiexec.exe -ArgumentList '/i "${q(ready.file)}" ${relaunch ? '/passive' : '/qn'} /norestart /l*v "${q(log)}"' -Wait`,
+      relaunch ? `Start-Process -FilePath '${q(exe)}'` : '',
+    ].join('\n');
+    const encoded = Buffer.from(worker, 'utf16le').toString('base64');
+    const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      `Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile','-NonInteractive','-EncodedCommand','${encoded}'`,
+    ], { windowsHide: true, stdio: 'ignore', timeout: 30000 });
+    if (r.status !== 0) {
+      send('update:status', { state: 'error', message: `couldn't start the installer (${r.error ? r.error.message : `exit ${r.status}`})` });
+      return false;
+    }
     installing = true;
-    const exe = process.execPath.replace(/'/g, "''");
-    const msi = ready.file.replace(/'/g, "''");
-    const script = [
-      `Wait-Process -Id ${process.pid} -ErrorAction SilentlyContinue`,
-      `$p = Start-Process msiexec.exe -ArgumentList @('/i', '"${msi}"', '${relaunch ? '/passive' : '/qn'}', '/norestart') -Wait -PassThru`,
-      relaunch ? `Start-Process -FilePath '${exe}'` : '',
-    ].join('; ');
-    spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', script], {
-      detached: true, stdio: 'ignore', windowsHide: true,
-    }).unref();
     return true;
   }
 

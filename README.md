@@ -15,7 +15,7 @@ npm install
 npm start          # run from source
 npm run dist       # build dist/Claude-Agent-Viewer-<version>.msi
 ```
-To ship a release: `npm version patch && git push --follow-tags`. The `release` workflow builds the MSI and publishes it, and installed copies update themselves.
+To ship a release: bump the version in `package.json`, add its section to the top of `RELEASE_NOTES.md`, then push a plain version tag (`git tag 1.2.1 && git push origin refs/tags/1.2.1`). The `release` workflow builds the MSI and publishes it with those notes, and installed copies update themselves.
 
 ## How agents show up
 Claude Code writes each subagent's transcript to

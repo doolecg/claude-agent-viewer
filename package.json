@@ -1,6 +1,6 @@
 {
   "name": "claude-agent-viewer",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Hyprland-style tiling viewer for Claude Code terminals and their subagents",
   "main": "main.js",
   "scripts": {
