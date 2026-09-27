@@ -1,0 +1,38 @@
+# Push a v* tag (npm version patch && git push --follow-tags) to build the MSI and
+# publish it as a GitHub release. Installed copies pick it up via updater.js.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  msi:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run dist
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The version in package.json names the release; a pushed tag must agree with it.
+          tag="v$(node -p "require('./package.json').version")"
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            echo "Tag $GITHUB_REF_NAME doesn't match package.json ($tag)"; exit 1
+          fi
+          msi=$(ls dist/*.msi)
+          gh release view "$tag" >/dev/null 2>&1 \
+            && gh release upload "$tag" "$msi" --clobber \
+            || gh release create "$tag" "$msi" --title "Claude Agent Viewer $tag" --generate-notes
