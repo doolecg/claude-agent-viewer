@@ -10,6 +10,10 @@ const crypto = require('crypto');
 const pty = require('@lydell/node-pty');
 const { createUpdater } = require('./updater');
 const shellIntegration = require('./shell-integration');
+const { THEMES } = require('./renderer/themes');
+
+// Dev runs can use their own profile (config + single-instance lock) beside an installed copy.
+if (process.env.CAV_USER_DATA) app.setPath('userData', process.env.CAV_USER_DATA);
 
 const PROJECTS_DIR = path.join(os.homedir(), '.claude', 'projects');
 // Lives in %APPDATA%/Claude Agent Viewer so it survives updates (the install dir is replaced).
@@ -27,14 +31,15 @@ const DEFAULT_KEYBINDS = {
   toggleLayout: ['Alt+M'],
   promoteMaster: ['Alt+Shift+M'],
   focusLeft: ['Alt+Left', 'Alt+H'], focusRight: ['Alt+Right', 'Alt+L'],
-  focusUp: ['Alt+Up', 'Alt+K'], focusDown: ['Alt+Down', 'Alt+J'],
+  focusUp: ['Alt+Up'], focusDown: ['Alt+Down', 'Alt+J'],
   swapLeft: ['Alt+Shift+Left', 'Alt+Shift+H'], swapRight: ['Alt+Shift+Right', 'Alt+Shift+L'],
   swapUp: ['Alt+Shift+Up', 'Alt+Shift+K'], swapDown: ['Alt+Shift+Down', 'Alt+Shift+J'],
   resizeLeft: ['Ctrl+Alt+Left'], resizeRight: ['Ctrl+Alt+Right'],
   resizeUp: ['Ctrl+Alt+Up'], resizeDown: ['Ctrl+Alt+Down'],
   prevWorkspace: ['Alt+PageUp'], nextWorkspace: ['Alt+PageDown'],
-  help: ['F1', 'Alt+Slash'],
-  openConfig: ['Alt+Comma'],
+  help: ['Alt+K', 'F1', 'Alt+Slash'], // keybind popup
+  settings: ['Alt+Comma'],
+  openConfig: [],
   devtools: ['Ctrl+Shift+I'],
   // Alt+1..9 switch workspace, Alt+Shift+1..9 move the focused tile there.
 };
@@ -61,22 +66,57 @@ const DEFAULT_CONFIG = {
   fontSize: 13,
   fontFamily: "'Cascadia Mono', 'Cascadia Code', Consolas, monospace",
   opacity: 0.86,
+  blur: 20,
+  lineHeight: 1,
+  cursorBlink: true,
+  cursorStyle: 'block',           // 'block' | 'bar' | 'underline'
+  scrollback: 10000,
+  theme: 'obsidian',              // obsidian | void | ember | graphite | claude
+  accent: '',                     // '' = the theme's own; otherwise a hex color
+  wallpaper: 'glow-dots',         // 'glow-dots' | 'glow' | 'plain'
+  borderAnimation: 'active',      // 'active' (focused + running agents) | 'focused' | 'off'
+  borderAnimationSeconds: 8,
   autoUpdate: true,               // check GitHub releases and install new versions
   explorerContextMenu: true,      // "Open in Claude Agent Viewer" when right-clicking a folder
   keybinds: DEFAULT_KEYBINDS,
 };
 
-function loadConfig() {
-  let user = {};
-  try { user = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {}
-  const cfg = { ...DEFAULT_CONFIG, ...user, keybinds: { ...DEFAULT_KEYBINDS, ...(user.keybinds || {}) } };
-  if (!fs.existsSync(CONFIG_PATH)) {
-    try { fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true }); fs.writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2)); } catch {}
-  }
-  return cfg;
+// Only what the user changed is stored, so new defaults reach existing installs.
+let user = {};
+try { user = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')); } catch {}
+migrateKeybinds(user.keybinds);
+const merged = () => ({ ...DEFAULT_CONFIG, ...user, keybinds: { ...DEFAULT_KEYBINDS, ...(user.keybinds || {}) } });
+const config = merged();
+
+// Older versions wrote every default into config.json. Drop the saved copies of
+// defaults that have since changed, so Alt+K (keybind popup) and Alt+, (settings) work.
+function migrateKeybinds(kb) {
+  if (!kb) return;
+  const was = { focusUp: ['Alt+Up', 'Alt+K'], help: ['F1', 'Alt+Slash'], openConfig: ['Alt+Comma'] };
+  for (const [k, v] of Object.entries(was)) if (JSON.stringify(kb[k]) === JSON.stringify(v)) delete kb[k];
 }
 
-const config = loadConfig();
+function saveUser() {
+  try {
+    fs.mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(user, null, 2));
+  } catch (e) { console.error('config save failed', e); }
+}
+
+// patch: { key: value }; null resets a key to its default.
+ipcMain.handle('config:set', (_e, patch) => {
+  for (const [k, v] of Object.entries(patch)) {
+    if (!(k in DEFAULT_CONFIG)) continue;
+    if (v === null) delete user[k]; else user[k] = v;
+  }
+  saveUser();
+  Object.assign(config, merged());
+  if ('explorerContextMenu' in patch && app.isPackaged) {
+    if (config.explorerContextMenu) shellIntegration.register(process.execPath); else shellIntegration.unregister();
+  }
+  return config;
+});
+ipcMain.handle('config:defaults', () => DEFAULT_CONFIG);
 let win = null;
 const send = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send(ch, data); };
 
@@ -144,7 +184,10 @@ ipcMain.handle('pick-folder', async () => {
   const r = await dialog.showOpenDialog(win, { properties: ['openDirectory'], defaultPath: config.defaultCwd });
   return r.canceled ? null : r.filePaths[0];
 });
-ipcMain.on('open-config', () => shell.openPath(CONFIG_PATH));
+ipcMain.on('open-config', () => {
+  if (!fs.existsSync(CONFIG_PATH)) saveUser();
+  shell.openPath(CONFIG_PATH);
+});
 ipcMain.on('win:minimize', () => win?.minimize());
 ipcMain.on('win:maximize', () => (win?.isMaximized() ? win.unmaximize() : win?.maximize()));
 ipcMain.on('win:close', () => win?.close());
@@ -286,7 +329,7 @@ function createWindow() {
   win = new BrowserWindow({
     width: 1600, height: 950, minWidth: 700, minHeight: 450,
     frame: false,
-    backgroundColor: '#1a1918',
+    backgroundColor: (THEMES[config.theme] || THEMES.obsidian).bg,
     title: 'Claude Agent Viewer',
     icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },

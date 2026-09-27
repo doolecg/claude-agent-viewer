@@ -36,14 +36,25 @@ A tile closes when nothing has happened in it for a while: no output, no typing,
 
 Set any of them to `0` to disable it. A closed Claude session can still be picked up again with `claude --resume`.
 
-## Keys (Alt is the "Super" key; F1 shows them all)
+## Settings and themes
+`Alt+,` (or the ⚙ in the top bar) opens **Settings**. Changes apply straight away and are saved. You can change:
+
+- **Theme:** *Obsidian* (default, near-black), *Void* (pure black for OLED), *Ember*, *Graphite* and the classic *Claude* charcoal, plus an accent color.
+- **Look:** wallpaper, the animated border (focused tile and running agents, focused only, or off), its speed, tile opacity and blur, rounding, border width and gaps.
+- **Terminal:** font, size, line height, cursor, scrollback.
+- **Layout, idle closing and startup:** the options in the table above, plus the default folder, the Claude command and arguments, and the shell.
+
+## Keys (Alt is the "Super" key; Alt+K shows them all)
+`Alt+K` (or the ⌨ in the top bar) opens the **keybinds** popup. Hover a row and click **+** to add a key, or **✕** to remove one. A key that's already used moves to the new action.
+
 | | |
 |---|---|
 | `Alt+Enter` / `Alt+Shift+Enter` | new Claude / new Claude in a folder |
 | `Alt+Shift+T` | new PowerShell |
 | `Alt+Q` | close tile |
 | `Alt+M` / `Alt+Shift+M` | master ⇄ dwindle layout / make focused tile the master |
-| `Alt+←↑→↓` or `Alt+HJKL` | move focus |
+| `Alt+K` / `Alt+,` | keybinds / settings |
+| `Alt+←↑→↓` or `Alt+H`, `Alt+J`, `Alt+L` | move focus |
 | `Alt+Shift+arrows` | swap tiles |
 | `Ctrl+Alt+arrows` | resize |
 | `Alt+F` / `Alt+E` | fullscreen / flip split (dwindle) |
@@ -51,4 +62,4 @@ Set any of them to `0` to disable it. A closed Claude session can still be picke
 | `Alt+Shift+A` | close all finished agents |
 | `Alt+drag`, `Alt+right-drag`, `Alt+wheel` | swap, resize, switch workspace |
 
-Everything, including keybinds, gaps, rounding, opacity, font, default folder and layout, lives in `%APPDATA%\Claude Agent Viewer\config.json`. It's created on first run, and `Alt+,` opens it.
+Settings live in `%APPDATA%\Claude Agent Viewer\config.json`, which stores only what you've changed. Settings has an *Open config.json* button.

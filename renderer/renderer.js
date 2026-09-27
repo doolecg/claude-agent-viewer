@@ -2,12 +2,10 @@
 
 (async () => {
   const cfg = await cav.config();
+  const defaults = await cav.defaults();
   const $ = s => document.querySelector(s);
   const desktop = $('#desktop');
   const root = document.documentElement.style;
-  root.setProperty('--rounding', cfg.rounding + 'px');
-  root.setProperty('--border', cfg.borderSize + 'px');
-  root.setProperty('--glass', `rgba(38, 38, 36, ${cfg.opacity})`);
 
   const WS_COUNT = 9;
   const workspaces = [];       // { el, hint, tree, focused, fullscreen }
@@ -25,14 +23,19 @@
     el.className = 'workspace' + (i === 0 ? '' : ' right');
     const hint = document.createElement('div');
     hint.className = 'empty-hint';
-    hint.innerHTML = `<div class="big">✻</div><div class="headline">What should we build?</div><div>Workspace ${i + 1} is empty</div>
-      <div class="row"><span><kbd>${bindLabel('newClaude')}</kbd> new Claude</span>
-      <span><kbd>${bindLabel('newClaudeIn')}</kbd> Claude in folder…</span>
-      <span><kbd>${bindLabel('help')}</kbd> all keys</span></div>
-      <div>Subagents open here in their own tiles as soon as they start.</div>`;
     el.appendChild(hint);
     desktop.appendChild(el);
     workspaces.push({ el, hint, tree: null, focused: null, fullscreen: null, layout: cfg.defaultLayout, mfact: cfg.masterRatio });
+  }
+
+  function renderHints() {
+    const k = a => bindLabel(a) ? `<kbd>${esc(Panels.pretty(bindLabel(a)))}</kbd>` : '';
+    workspaces.forEach((ws, i) => {
+      ws.hint.innerHTML = `<div class="big">✻</div><div class="headline">What should we build?</div><div>Workspace ${i + 1} is empty</div>
+        <div class="row"><span>${k('newClaude')} new Claude</span><span>${k('newClaudeIn')} Claude in folder…</span>
+        <span>${k('help')} keybinds</span><span>${k('settings')} settings</span></div>
+        <div>Subagents open here in their own tiles as soon as they start.</div>`;
+    });
   }
 
   function switchWorkspace(i) {
@@ -160,15 +163,8 @@
     el.innerHTML = `<div class="inner"><div class="tbar"><span class="ico">${kind === 'claude' ? '✻' : kind === 'agent' ? '◆' : '❯'}</span>
       <span class="title"></span><span class="badge"></span><button class="x" title="Close">✕</button></div><div class="term"></div></div>`;
     const term = new Terminal({
-      fontFamily: cfg.fontFamily, fontSize: cfg.fontSize, cursorBlink: kind !== 'agent', allowTransparency: true,
-      scrollback: 10000, disableStdin: kind === 'agent', cursorInactiveStyle: 'none', allowProposedApi: true,
-      theme: {
-        background: 'rgba(0,0,0,0)', foreground: '#f0eee6', cursor: kind === 'agent' ? 'rgba(0,0,0,0)' : '#d97757',
-        cursorAccent: '#1f1e1d', selectionBackground: 'rgba(217,119,87,0.3)',
-        black: '#2b2a27', red: '#e06c5a', green: '#9cb88a', yellow: '#e3b27a', blue: '#8fa9c7', magenta: '#c89ab8',
-        cyan: '#8dbab3', white: '#f0eee6', brightBlack: '#8a857a', brightRed: '#f08a78', brightGreen: '#b4cfa3',
-        brightYellow: '#f0c995', brightBlue: '#abc2dc', brightMagenta: '#dcb4ce', brightCyan: '#a9d0ca', brightWhite: '#faf9f5',
-      },
+      ...termOptions(kind), allowTransparency: true,
+      disableStdin: kind === 'agent', cursorInactiveStyle: 'none', allowProposedApi: true,
     });
     const fit = new FitAddon.FitAddon();
     term.loadAddon(fit);
@@ -179,6 +175,44 @@
     term.attachCustomKeyEventHandler(e => handleTermKey(e, w));
     wins.set(id, w);
     return w;
+  }
+
+  // ------------------------------------------------------------ appearance
+
+  const theme = () => THEMES[cfg.theme] || THEMES.obsidian;
+  const accent = () => cfg.accent || theme().accent;
+  function rgba(hex, a) {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return `rgba(${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}, ${a})`;
+  }
+
+  function termOptions(kind) {
+    const t = theme();
+    return {
+      fontFamily: cfg.fontFamily, fontSize: cfg.fontSize, lineHeight: cfg.lineHeight, scrollback: cfg.scrollback,
+      cursorStyle: cfg.cursorStyle, cursorBlink: kind !== 'agent' && cfg.cursorBlink,
+      theme: {
+        background: 'rgba(0,0,0,0)', foreground: t.text, cursor: kind === 'agent' ? 'rgba(0,0,0,0)' : accent(),
+        cursorAccent: t.bg, selectionBackground: rgba(accent(), 0.3),
+        black: t.termBlack, red: '#e06c5a', green: '#9cb88a', yellow: '#e3b27a', blue: '#8fa9c7', magenta: '#c89ab8',
+        cyan: '#8dbab3', white: '#f0eee6', brightBlack: '#8a857a', brightRed: '#f08a78', brightGreen: '#b4cfa3',
+        brightYellow: '#f0c995', brightBlue: '#abc2dc', brightMagenta: '#dcb4ce', brightCyan: '#a9d0ca', brightWhite: '#faf9f5',
+      },
+    };
+  }
+
+  function applyAppearance() {
+    const t = theme();
+    const vars = {
+      '--bg': t.bg, '--glow': t.glow, '--bar-rgb': t.bar, '--glass-rgb': t.glass, '--card-rgb': t.card, '--ink-rgb': t.ink,
+      '--text': t.text, '--dim': t.dim, '--inactive': t.inactive, '--accent': accent(), '--theme-accent': t.accent,
+      '--agent': t.agent, '--done': t.done, '--rounding': cfg.rounding + 'px', '--border': cfg.borderSize + 'px',
+      '--opacity': cfg.opacity, '--blur': cfg.blur + 'px', '--flow': cfg.borderAnimationSeconds + 's',
+    };
+    for (const [k, v] of Object.entries(vars)) root.setProperty(k, v);
+    document.body.className = `wp-${cfg.wallpaper} border-${cfg.borderAnimation}`;
+    for (const w of wins.values()) Object.assign(w.term.options, termOptions(w.kind));
+    workspaces.forEach((_, i) => layout(i, i !== current));
   }
 
   function mount(w, wsIndex, target, { focus = true } = {}) {
@@ -541,16 +575,22 @@
     swapUp: () => swapWith(neighbour('Up')), swapDown: () => swapWith(neighbour('Down')),
     resizeLeft: () => resize('Left'), resizeRight: () => resize('Right'), resizeUp: () => resize('Up'), resizeDown: () => resize('Down'),
     prevWorkspace: () => switchWorkspace(current - 1), nextWorkspace: () => switchWorkspace(current + 1),
-    help: () => $('#help').classList.toggle('hidden'),
+    help: () => togglePanel('keys'),
+    settings: () => togglePanel('settings'),
     openConfig: () => cav.openConfig(),
     devtools: () => cav.devtools(),
   };
   const bindMap = new Map();
-  for (const [action, combos] of Object.entries(cfg.keybinds)) for (const c of [].concat(combos)) bindMap.set(canon(c), action);
   for (let i = 1; i <= WS_COUNT; i++) {
-    bindMap.set(`Alt+${i}`, `ws${i}`); actions[`ws${i}`] = () => switchWorkspace(i - 1);
-    bindMap.set(`Alt+Shift+${i}`, `mv${i}`); actions[`mv${i}`] = () => moveToWorkspace(i - 1);
+    actions[`ws${i}`] = () => switchWorkspace(i - 1);
+    actions[`mv${i}`] = () => moveToWorkspace(i - 1);
   }
+  function rebuildBinds() {
+    bindMap.clear();
+    for (const [action, combos] of Object.entries(cfg.keybinds)) if (actions[action]) for (const c of [].concat(combos)) bindMap.set(canon(c), action);
+    for (let i = 1; i <= WS_COUNT; i++) { bindMap.set(`Alt+${i}`, `ws${i}`); bindMap.set(`Alt+Shift+${i}`, `mv${i}`); }
+  }
+  rebuildBinds();
   function bindLabel(action) { return [].concat(cfg.keybinds[action] || [])[0] || ''; }
 
   function handleTermKey(e, w) {
@@ -567,27 +607,108 @@
   }
 
   window.addEventListener('keydown', e => {
+    if (recording) { e.preventDefault(); e.stopPropagation(); return recordKey(e); }
+    const panel = openPanel();
+    if (e.key === 'Escape' && panel) { closePanels(); e.preventDefault(); return; }
     const action = bindMap.get(eventCombo(e));
-    if (e.key === 'Escape' && !$('#help').classList.contains('hidden')) { $('#help').classList.add('hidden'); e.preventDefault(); return; }
     if (!action) return;
+    // With a panel open only the panel keys work, so nothing happens to the tiles behind it.
+    if (panel && action !== 'help' && action !== 'settings') return;
     e.preventDefault(); e.stopPropagation();
     if (!e.repeat || action.startsWith('resize')) actions[action]();
   }, true);
   // Stop a lone Alt press from doing anything odd in the frameless window.
   window.addEventListener('keyup', e => { if (e.key === 'Alt') e.preventDefault(); }, true);
 
-  const names = {
-    newClaude: 'New Claude terminal', newClaudeIn: 'New Claude in folder…', newShell: 'New shell', close: 'Close tile',
-    fullscreen: 'Fullscreen tile', toggleSplit: 'Toggle split direction', closeDoneAgents: 'Close finished agents',
-    toggleLayout: 'Master ⇄ dwindle layout', promoteMaster: 'Make focused tile the master',
-    focusLeft: 'Focus ←', focusRight: 'Focus →', focusUp: 'Focus ↑', focusDown: 'Focus ↓',
-    swapLeft: 'Swap ←', swapRight: 'Swap →', swapUp: 'Swap ↑', swapDown: 'Swap ↓',
-    resizeLeft: 'Resize ←', resizeRight: 'Resize →', resizeUp: 'Resize ↑', resizeDown: 'Resize ↓',
-    prevWorkspace: 'Previous workspace', nextWorkspace: 'Next workspace', help: 'This help', openConfig: 'Edit config.json', devtools: 'DevTools',
+  // ------------------------------------------------------------ panels
+
+  const PANELS = ['keys', 'settings'];
+  const openPanel = () => PANELS.find(p => !$('#' + p).classList.contains('hidden'));
+  function togglePanel(name) {
+    const was = openPanel();
+    closePanels(was === name);
+    if (was === name) return;
+    if (name === 'keys') renderKeys(); else renderSettings();
+    $('#' + name).classList.remove('hidden');
+    $('#' + name + ' .card-body').scrollTop = 0;
+    document.activeElement?.blur();
+  }
+  function closePanels(refocus = true) {
+    recording = null;
+    PANELS.forEach(p => $('#' + p).classList.add('hidden'));
+    if (refocus) focused()?.term.focus();
+  }
+  for (const p of PANELS) {
+    $('#' + p).addEventListener('mousedown', e => { if (e.target.id === p) closePanels(); });
+    $('#' + p).querySelector('[data-close]').onclick = () => closePanels();
+  }
+  $('#btn-keys').onclick = () => togglePanel('keys');
+  $('#btn-settings').onclick = () => togglePanel('settings');
+
+  // Settings save a moment after the last change, so dragging a slider writes once.
+  let pending = {}, saveT;
+  function save(patch) {
+    Object.assign(pending, patch);
+    clearTimeout(saveT);
+    saveT = setTimeout(() => { cav.setConfig(pending); pending = {}; }, 300);
+  }
+
+  const LIVE_LAYOUT = new Set(['defaultLayout', 'masterRatio']);
+  function setSetting(key, value) {
+    cfg[key] = value;
+    save({ [key]: value });
+    if (LIVE_LAYOUT.has(key)) for (const ws of workspaces) if (!ws.tree) { ws.layout = cfg.defaultLayout; ws.mfact = cfg.masterRatio; }
+    applyAppearance();
+  }
+  const renderSettings = () => Panels.renderSettings($('#settings-body'), cfg, setSetting, cav.pickFolder);
+  $('#set-json').onclick = () => cav.openConfig();
+  const resetBtn = $('#set-reset');
+  resetBtn.onclick = () => {
+    if (!resetBtn.dataset.armed) {
+      resetBtn.dataset.armed = '1'; resetBtn.textContent = 'Click again to reset';
+      return setTimeout(() => { delete resetBtn.dataset.armed; resetBtn.textContent = 'Reset to defaults'; }, 3000);
+    }
+    const patch = {};
+    for (const k of Object.keys(defaults)) if (k !== 'keybinds') { patch[k] = null; cfg[k] = defaults[k]; }
+    save(patch);
+    applyAppearance(); renderSettings();
+    toast('Settings reset to defaults. Keybinds were kept.');
   };
-  $('#help-binds').innerHTML = Object.entries(names).map(([a, n]) => `<div class="hb"><span>${n}</span><span>${[].concat(cfg.keybinds[a] || []).map(k => `<kbd>${k}</kbd>`).join(' ')}</span></div>`).join('')
-    + `<div class="hb"><span>Go to workspace</span><span><kbd>Alt+1…9</kbd></span></div><div class="hb"><span>Move tile to workspace</span><span><kbd>Alt+Shift+1…9</kbd></span></div>`;
-  $('#help').addEventListener('mousedown', e => { if (e.target.id === 'help') $('#help').classList.add('hidden'); });
+
+  // Keybinds: only the ones that differ from the defaults are saved.
+  let recording = null;
+  function saveKeybinds() {
+    const diff = {};
+    for (const [a, v] of Object.entries(cfg.keybinds)) if (JSON.stringify(v) !== JSON.stringify(defaults.keybinds[a])) diff[a] = v;
+    save({ keybinds: diff });
+    rebuildBinds(); renderHints(); renderKeys();
+  }
+  function renderKeys() {
+    Panels.renderKeys($('#keys-body'), cfg.keybinds, recording, {
+      onAdd: a => { recording = recording === a ? null : a; renderKeys(); },
+      onRemove: (a, i) => { cfg.keybinds[a] = [].concat(cfg.keybinds[a]).filter((_, j) => j !== i); saveKeybinds(); },
+    });
+  }
+  function recordKey(e) {
+    if (/^(Control|Alt|Shift|Meta)(Left|Right)$/.test(e.code)) return;
+    const a = recording;
+    if (e.key === 'Escape' && !e.ctrlKey && !e.altKey && !e.shiftKey) { recording = null; return renderKeys(); }
+    const combo = eventCombo(e);
+    if (!e.ctrlKey && !e.altKey && !/^F\d+$/.test(norm(e.code))) return toast('Use Ctrl or Alt with it (or an F-key), so typing still reaches the terminal.');
+    if (/^Alt\+(Shift\+)?[1-9]$/.test(combo)) return toast(`<b>${combo}</b> is fixed for workspaces.`);
+    recording = null;
+    for (const [other, combos] of Object.entries(cfg.keybinds)) {
+      const list = [].concat(combos);
+      if (other !== a && list.some(c => canon(c) === combo)) {
+        cfg.keybinds[other] = list.filter(c => canon(c) !== combo);
+        toast(`<b>${combo}</b> moved from “${esc(Panels.actionName(other))}”.`);
+      }
+    }
+    const mine = [].concat(cfg.keybinds[a] || []);
+    if (!mine.some(c => canon(c) === combo)) cfg.keybinds[a] = [...mine, combo];
+    saveKeybinds();
+  }
+  $('#keys-reset').onclick = () => { cfg.keybinds = structuredClone(defaults.keybinds); recording = null; saveKeybinds(); toast('Keybinds reset to defaults.'); };
 
   // ------------------------------------------------------------ bar
 
@@ -644,6 +765,8 @@
   });
   pill.onclick = () => { if (pill.classList.contains('ready')) cav.installUpdate(); };
 
+  applyAppearance();
+  renderHints();
   refreshBar();
   // Opened from Explorer's "Open in Claude Agent Viewer": the master starts in that folder,
   // and later right-clicks (while running) each add a Claude tile there.

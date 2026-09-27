@@ -2,6 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('cav', {
   config: () => ipcRenderer.invoke('config'),
+  setConfig: patch => ipcRenderer.invoke('config:set', patch),
+  defaults: () => ipcRenderer.invoke('config:defaults'),
   createPty: opts => ipcRenderer.invoke('pty:create', opts),
   writePty: (id, data) => ipcRenderer.send('pty:write', { id, data }),
   resizePty: (id, cols, rows) => ipcRenderer.send('pty:resize', { id, cols, rows }),

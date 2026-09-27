@@ -20,6 +20,8 @@
       <button class="pill update hidden" id="update-pill"></button>
       <span class="pill" id="stat-agents" title="Subagents running / finished"></span>
       <span class="pill" id="clock"></span>
+      <button class="icon-btn" id="btn-keys" title="Keybinds">⌨</button>
+      <button class="icon-btn" id="btn-settings" title="Settings">⚙</button>
       <div class="wc">
         <button id="wc-min" title="Minimize">─</button>
         <button id="wc-max" title="Maximize">□</button>
@@ -32,17 +34,36 @@
 
   <div id="toasts"></div>
 
-  <div id="help" class="hidden">
-    <div class="help-card">
-      <h2><span class="logo">✻</span> Claude Agent Viewer</h2>
-      <div id="help-binds"></div>
-      <p class="help-foot">Mouse: click to focus · Alt+drag a tile onto another to swap · Alt+right-drag to resize · Alt+wheel switches workspace</p>
+  <div id="keys" class="overlay hidden">
+    <div class="card">
+      <div class="card-head"><h2><span class="logo">✻</span> Keybinds</h2><span class="sub">Hover a row: + adds a key, ✕ removes one</span></div>
+      <div class="card-body" id="keys-body"></div>
+      <div class="card-foot">
+        <span class="grow">Esc closes · changes save as you make them</span>
+        <button class="btn" id="keys-reset">Reset to defaults</button>
+        <button class="btn primary" data-close>Done</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="settings" class="overlay hidden">
+    <div class="card">
+      <div class="card-head"><h2><span class="logo">✻</span> Settings</h2><span class="sub">Changes apply and save immediately</span></div>
+      <div class="card-body" id="settings-body"></div>
+      <div class="card-foot">
+        <span class="grow" id="settings-note"></span>
+        <button class="btn" id="set-json">Open config.json</button>
+        <button class="btn warn" id="set-reset">Reset to defaults</button>
+        <button class="btn primary" data-close>Done</button>
+      </div>
     </div>
   </div>
 
   <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
   <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="themes.js"></script>
   <script src="render-agent.js"></script>
+  <script src="settings.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>
